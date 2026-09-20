@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+
+# Local reference clones of upstream projects (not part of this repo)
+reference/
