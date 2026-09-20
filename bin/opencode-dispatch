@@ -1,0 +1,40 @@
+#!/bin/sh
+# Backend dispatcher for OpenChamber SSH-managed remotes.
+#
+# The desktop starts one remote `openchamber serve --port <N>` per SSH
+# instance entry (remoteOpenchamber.preferredPort), and that server spawns
+# this script as its agent backend ($opencodeBinary). We walk the ancestor
+# process chain for the managing server's --port: the pi port gets the pi
+# shim, anything else gets the real opencode. This makes the agent backend
+# selectable per instance entry without forking OpenChamber.
+#
+# Install: point the REMOTE host's ~/.config/openchamber/settings.json
+# "opencodeBinary" at this script. Create one desktop SSH instance per
+# backend, each with its own remoteOpenchamber.preferredPort.
+#
+# Env overrides: OCPI_PI_PORT (default 57124), OCPI_PI_SHIM (default:
+# sibling bin/opencode-pi), OCPI_REAL_OPENCODE (default: opencode on PATH).
+
+set -u
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PI_PORT="${OCPI_PI_PORT:-57124}"
+PI_SHIM="${OCPI_PI_SHIM:-$SCRIPT_DIR/opencode-pi}"
+REAL_OPENCODE="${OCPI_REAL_OPENCODE:-opencode}"
+
+pid=$$
+while [ -n "$pid" ] && [ "$pid" != "1" ]; do
+  args=$(ps -o args= -p "$pid" 2>/dev/null) || break
+  case "$args" in
+    *@openchamber*--port*)
+      port=$(echo "$args" | sed -n "s/.*--port[ =]\([0-9]*\).*/\1/p")
+      if [ "$port" = "$PI_PORT" ]; then
+        exec "$PI_SHIM" "$@"
+      fi
+      exec "$REAL_OPENCODE" "$@"
+      ;;
+  esac
+  pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d " ")
+done
+
+exec "$REAL_OPENCODE" "$@"
