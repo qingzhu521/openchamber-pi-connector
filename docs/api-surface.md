@@ -85,11 +85,39 @@ Minimum viable set for M1 (chat works): `server.connected`,
 
 ## Open items
 
-- [ ] Exact mechanism OpenChamber uses to point at an *external* OpenCode
-      server URL (managed vs external lifecycle lives in `packages/web`);
-      document the user-facing setup steps.
+- [x] How OpenChamber launches the agent backend: it spawns
+      `$OPENCODE_BINARY serve --hostname H --port P` (managed lifecycle in
+      `packages/web/server/lib/opencode/lifecycle.js`), parses the stdout line
+      `opencode server listening on <url>`, then health-checks
+      `GET /global/health`. `settings.opencodeBinary` (settings.json) is the
+      reliable override; combine with `OPENCHAMBER_DATA_DIR` for an isolated
+      test profile.
 - [ ] Payload field-level schemas for each event type (from
       `@opencode-ai/sdk/v2` types).
-- [ ] Whether OpenChamber's WebSocket relay (`global/event/ws`) re-broadcasts
-      opencode SSE server-side in `packages/web`, or the UI subscribes to
-      opencode directly — determines where the adapter plugs in.
+- [x] The UI uses `@opencode-ai/sdk/v2`; note the v2 surface differs from v1
+      (`question.list` → `GET /question`, `permission.list` →
+      `GET /permission`, session list → `GET /experimental/session`,
+      `GET /path`, `GET /vcs` are all probed during bootstrap and must exist).
+
+## Bootstrap probes observed live (OpenChamber 1.21.0)
+
+These are called at startup and 404s surface as console errors or blocked
+send ("provider or model not selected"):
+
+| Endpoint | Minimum viable response |
+|---|---|
+| `GET /provider` | `{all: Provider[], default: {providerID: modelID}, connected: string[]}` |
+| `GET /config/providers` | `{providers: Provider[], default: {...}}` |
+| `GET /question` | `[]` |
+| `GET /permission` | `[]` |
+| `GET /lsp` | `[]` |
+| `GET /formatter` | `[]` |
+| `GET /experimental/session` | `Session[]` (all directories) |
+| `GET /path` | `{home, state, config, worktree, directory}` |
+| `GET /vcs` | `{}` or `{branch}` |
+| `GET /agent` | at least one primary agent |
+| `GET /global/health` | any 200 JSON |
+
+Gotcha: OpenChamber's model picker ignores `default` when it can't match it
+and silently falls back to the **first listed provider/model** — the adapter
+sorts pi's active model to the front for this reason.

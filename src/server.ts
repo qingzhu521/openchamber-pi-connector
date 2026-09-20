@@ -3,8 +3,18 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
+import { appendFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { homedir } from "node:os";
 import { SessionManager } from "./sessions.js";
+import { loadCatalog, type Catalog } from "./catalog.js";
 import type { OCEvent, OCPromptBody } from "./types.js";
+
+const DEBUG_LOG = process.env.OCPI_DEBUG_LOG ?? "/tmp/openchamber-pi-debug.log";
+
+function debugLog(line: string): void {
+  if (process.env.OCPI_DEBUG) appendFileSync(DEBUG_LOG, line + "\n");
+}
 
 export interface AdapterServerOptions {
   port: number;
@@ -17,10 +27,19 @@ export class AdapterServer {
   private server: Server;
   private sessions: SessionManager;
   private sseClients = new Set<ServerResponse>();
+  private catalogPromise: Promise<Catalog> | undefined;
 
   constructor(private options: AdapterServerOptions) {
     this.sessions = new SessionManager((directory, event) => this.broadcast(directory, event));
     this.server = createServer((req, res) => void this.route(req, res));
+  }
+
+  private catalog(): Promise<Catalog> {
+    this.catalogPromise ??= loadCatalog(this.options.defaultDirectory).catch((err) => {
+      console.error("[catalog] failed to load models from pi:", err);
+      return { providers: [], defaults: {} };
+    });
+    return this.catalogPromise;
   }
 
   async start(): Promise<void> {
@@ -67,6 +86,7 @@ export class AdapterServer {
   // ---------------------------------------------------------------
 
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    debugLog(`[http] ${req.method} ${req.url}`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-opencode-directory");
@@ -146,7 +166,7 @@ export class AdapterServer {
             .filter((p) => p.type === "text" && typeof p.text === "string")
             .map((p) => p.text!)
             .join("\n");
-          void this.sessions.prompt(sessionId!, text);
+          void this.sessions.prompt(sessionId!, text, body.model, body.noReply);
           res.writeHead(204).end();
           return;
         }
@@ -156,8 +176,7 @@ export class AdapterServer {
             .filter((p) => p.type === "text" && typeof p.text === "string")
             .map((p) => p.text!)
             .join("\n");
-          await this.sessions.prompt(sessionId!, text);
-          // Synchronous variant: return current transcript tail.
+          await this.sessions.prompt(sessionId!, text, body.model, body.noReply);
           const msgs = this.sessions.messages(sessionId!) ?? [];
           this.json(res, 200, msgs[msgs.length - 1] ?? null);
           return;
@@ -180,17 +199,61 @@ export class AdapterServer {
       this.json(res, 200, [{ id: directory, worktree: directory, time: { created: Date.now() } }]);
       return;
     }
-    if (path === "/config" && method === "GET") {
+    if ((path === "/config" || path === "/global/config") && method === "GET") {
       this.json(res, 200, {});
       return;
     }
+
+    // --- model catalog (from pi) ---
     if (path === "/provider" && method === "GET") {
-      // M1: empty provider list; model display comes from message metadata.
-      this.json(res, 200, { all: [], default: {}, connected: [] });
+      const cat = await this.catalog();
+      this.json(res, 200, { all: cat.providers, default: cat.defaults, connected: cat.providers.map((p) => p.id) });
       return;
     }
     if (path === "/config/providers" && method === "GET") {
-      this.json(res, 200, { providers: [], default: {} });
+      const cat = await this.catalog();
+      this.json(res, 200, { providers: cat.providers, default: cat.defaults });
+      return;
+    }
+
+    // --- bootstrap probes OpenChamber expects to exist ---
+    if (path === "/experimental/session" && method === "GET") {
+      this.json(res, 200, this.sessions.list());
+      return;
+    }
+    if (path === "/question" && method === "GET") {
+      this.json(res, 200, []);
+      return;
+    }
+    if (path === "/permission" && method === "GET") {
+      this.json(res, 200, []);
+      return;
+    }
+    if (path === "/lsp" && method === "GET") {
+      this.json(res, 200, []);
+      return;
+    }
+    if (path === "/formatter" && method === "GET") {
+      this.json(res, 200, []);
+      return;
+    }
+    if (path === "/mcp" && method === "GET") {
+      this.json(res, 200, {});
+      return;
+    }
+    if (path === "/command" && method === "GET") {
+      this.json(res, 200, []);
+      return;
+    }
+    if (path === "/path" && method === "GET") {
+      this.json(res, 200, { home: homedir(), state: "", config: "", worktree: directory, directory });
+      return;
+    }
+    if (path === "/vcs" && method === "GET") {
+      execFile("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: directory, timeout: 3000 }, (err, stdout) => {
+        const branch = err ? undefined : stdout.trim() || undefined;
+        this.json(res, 200, branch === undefined ? {} : { branch });
+      });
       return;
     }
     if (path === "/agent" && method === "GET") {

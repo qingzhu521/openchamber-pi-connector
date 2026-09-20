@@ -1,29 +1,45 @@
 #!/usr/bin/env node
 /**
- * openchamber-pi-connector CLI entry.
+ * openchamber-pi-connector CLI.
  *
- *   openchamber-pi [--port 4096] [--host 127.0.0.1] [--directory /path/to/project]
+ * Default mode:
+ *   openchamber-pi [--port 4096] [--host 127.0.0.1] [--directory /path]
  *
- * Then point OpenChamber at the printed URL as an external OpenCode server.
+ * OpenCode-compatible serve mode — OpenChamber spawns
+ * `$OPENCODE_BINARY serve --hostname H --port P` and waits for the stdout
+ * line "opencode server listening on <url>", then health-checks
+ * GET /global/health:
+ *   openchamber-pi serve --hostname 127.0.0.1 --port 4096 [--directory /path]
  */
 
 import { AdapterServer } from "./server.js";
 
 function arg(name: string, fallback: string): string {
-  const i = process.argv.indexOf(`--${name}`);
-  return i !== -1 && process.argv[i + 1] !== undefined ? process.argv[i + 1]! : fallback;
+  const argv = process.argv;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === `--${name}` && argv[i + 1] !== undefined) return argv[i + 1]!;
+    if (a.startsWith(`--${name}=`)) return a.slice(name.length + 3);
+  }
+  return fallback;
 }
 
+const serveMode = process.argv[2] === "serve";
+
 const port = Number(arg("port", "4096"));
-const host = arg("host", "127.0.0.1");
+const host = arg("host", arg("hostname", "127.0.0.1"));
 const directory = arg("directory", process.cwd());
 
 const server = new AdapterServer({ port, host, defaultDirectory: directory });
 
 await server.start();
-console.log(`openchamber-pi-connector listening on ${server.url}`);
-console.log(`default directory: ${directory}`);
-console.log("point OpenChamber at this URL as an external OpenCode server");
+
+if (serveMode) {
+  console.log(`opencode server listening on ${server.url}`);
+} else {
+  console.log(`openchamber-pi-connector listening on ${server.url}`);
+  console.log(`default directory: ${directory}`);
+}
 
 const shutdown = (): void => {
   void server.stop().then(() => process.exit(0));

@@ -47,6 +47,7 @@ export class PiRpcClient extends EventEmitter {
   private decoder = new StringDecoder("utf8");
   private pending = new Map<string, PendingRequest>();
   private closed = false;
+  private stderrTail = "";
 
   onEvent(listener: (payload: Record<string, unknown>) => void): this {
     return super.on("event", listener);
@@ -61,8 +62,12 @@ export class PiRpcClient extends EventEmitter {
     const args = ["--mode", "rpc", ...(options.args ?? [])];
     this.proc = spawn(options.piBinary ?? "pi", args, {
       cwd: options.cwd,
-      stdio: ["pipe", "pipe", "inherit"],
+      stdio: ["pipe", "pipe", "pipe"],
       env: process.env,
+    });
+
+    this.proc.stderr!.on("data", (chunk: Buffer) => {
+      this.stderrTail = (this.stderrTail + chunk.toString()).slice(-8192);
     });
 
     this.proc.stdout!.on("data", (chunk: Buffer | string) => {
@@ -77,6 +82,10 @@ export class PiRpcClient extends EventEmitter {
     this.proc.on("error", (err) => this.failAll(err));
     this.proc.on("exit", (code, signal) => {
       this.closed = true;
+      console.error(
+        `[pi-rpc] process exited code=${code} signal=${signal}` +
+          (this.stderrTail ? `\n[pi-rpc] stderr tail:\n${this.stderrTail}` : ""),
+      );
       this.failAll(new Error(`pi exited (code=${code} signal=${signal})`));
       this.emit("exit", code, signal);
     });

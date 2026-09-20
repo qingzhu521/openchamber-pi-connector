@@ -18,9 +18,40 @@ No OpenChamber fork required: point OpenChamber at this adapter as an
 
 ## Status
 
-Early development. See [docs/architecture.md](docs/architecture.md) for the
-design and [docs/api-surface.md](docs/api-surface.md) for the endpoint
-compatibility list.
+**M1 works**: a real OpenChamber UI session chatting through the adapter with
+pi as the backend — session create, prompt, live text/reasoning streaming over
+SSE, abort, rename, delete, model catalog from pi. See
+[docs/architecture.md](docs/architecture.md) for the design and
+[docs/api-surface.md](docs/api-surface.md) for the endpoint compatibility list.
+
+## Usage with OpenChamber
+
+OpenChamber spawns whatever `$OPENCODE_BINARY` / `settings.opencodeBinary`
+points to as `serve --hostname H --port P`, waits for the stdout line
+`opencode server listening on <url>`, then health-checks `/global/health`.
+This repo's `bin/opencode-pi` wrapper implements that contract on top of pi.
+
+Recommended: run a second, isolated OpenChamber profile so your main setup is
+untouched:
+
+```bash
+# isolated profile dir
+mkdir -p ~/.config/openchamber-pi
+cat > ~/.config/openchamber-pi/settings.json <<'EOF'
+{
+  "opencodeBinary": "/absolute/path/to/openchamber-pi-connector/bin/opencode-pi"
+}
+EOF
+
+# start OpenChamber with pi as the agent backend
+OPENCHAMBER_DATA_DIR=~/.config/openchamber-pi openchamber serve --port 3600
+# open http://127.0.0.1:3600
+```
+
+Requires: Node.js 22+, the `pi` CLI on PATH (`npm i -g @earendil-works/pi-coding-agent`).
+
+Debug logging: set `OCPI_DEBUG=1` (writes HTTP requests and pi events to
+`/tmp/openchamber-pi-debug.log`, override with `OCPI_DEBUG_LOG`).
 
 ## Why
 

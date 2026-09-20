@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { PiRpcClient } from "./pi-rpc.js";
 import type {
   OCAssistantMessage,
@@ -149,9 +150,16 @@ export class SessionManager {
     return true;
   }
 
-  async prompt(sessionId: string, text: string): Promise<void> {
+  async prompt(sessionId: string, text: string, model?: OCModelRef, noReply = false): Promise<void> {
     const s = this.sessions.get(sessionId);
     if (!s) throw new Error(`unknown session: ${sessionId}`);
+
+    if (model && (model.providerID !== s.model.providerID || model.modelID !== s.model.modelID)) {
+      const res = await s.pi
+        .command({ type: "set_model", provider: model.providerID, modelId: model.modelID })
+        .catch(() => undefined);
+      if (res?.success) s.model = model;
+    }
 
     const userMsg: OCUserMessage = {
       id: id("msg"),
@@ -171,6 +179,8 @@ export class SessionManager {
       this.emit(s.info.directory, { type: "session.updated", properties: { info: s.info } });
     }
     this.emit(s.info.directory, { type: "message.updated", properties: { info: userMsg } });
+
+    if (noReply) return; // register-only semantics: record the message, do not run the agent
 
     // pi streams asynchronously after accepting the prompt.
     const res = await s.pi.command({ type: "prompt", message: text });
@@ -211,6 +221,11 @@ export class SessionManager {
 
   private onPiEvent(s: ManagedSession, ev: Record<string, unknown>): void {
     const dir = s.info.directory;
+    if (process.env.OCPI_DEBUG) {
+      const ame = (ev.assistantMessageEvent as { type?: string } | undefined)?.type;
+      const target = process.env.OCPI_DEBUG_LOG ?? "/tmp/openchamber-pi-debug.log";
+      appendFileSync(target, `[pi-event] ${String(ev.type)}${ame ? `/${ame}` : ""} ${JSON.stringify(ev).slice(0, 300)}\n`);
+    }
     switch (ev.type) {
       case "agent_start":
         this.setStatus(s, { type: "busy" });
