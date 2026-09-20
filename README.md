@@ -1,4 +1,4 @@
-# openchamber-pi
+# OpenChamber Pi Connector
 
 Use [OpenChamber](https://github.com/openchamber/openchamber) with the
 [pi coding agent](https://github.com/badlogic/pi-mono) (`@earendil-works/pi-coding-agent`)

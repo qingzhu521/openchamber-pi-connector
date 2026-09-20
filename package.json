@@ -1,5 +1,5 @@
 {
-  "name": "openchamber-pi",
+  "name": "openchamber-pi-connector",
   "version": "0.1.0",
   "description": "OpenCode-API-compatible adapter that lets OpenChamber drive the pi coding agent",
   "type": "module",
