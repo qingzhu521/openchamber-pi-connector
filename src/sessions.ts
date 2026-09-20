@@ -314,8 +314,13 @@ export class SessionManager {
     if (!ame || ame.contentIndex === undefined) return;
 
     const dir = s.info.directory;
-    const kind = ame.type.startsWith("thinking") ? "reasoning" : ame.type.startsWith("text") ? "text" : null;
-    if (!kind) return; // toolcall_* / start / done / error — M2
+    // `wire` is pi's content-block name (thinking_* / text_*); `kind` is the
+    // OpenCode part type we translate it into. Keep the two separate: deriving
+    // the delta/end event names from `kind` produced "reasoning_delta"/"reasoning_end",
+    // which pi never emits, so thinking content was silently dropped.
+    const wire = ame.type.startsWith("thinking") ? "thinking" : ame.type.startsWith("text") ? "text" : null;
+    if (!wire) return; // toolcall_* / start / done / error — M2
+    const kind: "text" | "reasoning" = wire === "thinking" ? "reasoning" : "text";
 
     let part = streaming.parts.get(ame.contentIndex);
     if (!part) {
@@ -326,11 +331,11 @@ export class SessionManager {
       this.emitPart(s, part);
     }
 
-    if (ame.type === `${kind}_delta` && typeof ame.delta === "string") {
+    if (ame.type === `${wire}_delta` && typeof ame.delta === "string") {
       part.text += ame.delta;
       this.emitPart(s, part, ame.delta);
-    } else if (ame.type === `${kind}_end` && typeof ame.content === "string") {
-      part.text = ame.content;
+    } else if (ame.type === `${wire}_end`) {
+      if (typeof ame.content === "string") part.text = ame.content;
       if (part.time) part.time.end = Date.now();
       this.emitPart(s, part);
     }
