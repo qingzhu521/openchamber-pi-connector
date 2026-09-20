@@ -12,6 +12,9 @@ import type { OCEvent, OCPromptBody } from "./types.js";
 
 const DEBUG_LOG = process.env.OCPI_DEBUG_LOG ?? "/tmp/openchamber-pi-debug.log";
 
+// OpenChamber reads /global/health's version as the opencode version and nags about updates.
+const OPENCODE_COMPAT_VERSION = "1.18.31";
+
 function debugLog(line: string): void {
   if (process.env.OCPI_DEBUG) appendFileSync(DEBUG_LOG, line + "\n");
 }
@@ -119,7 +122,7 @@ export class AdapterServer {
     }
 
     if (method === "GET" && path === "/global/health") {
-      this.json(res, 200, { healthy: true, version: "0.1.0" });
+      this.json(res, 200, { healthy: true, version: OPENCODE_COMPAT_VERSION });
       return;
     }
 
