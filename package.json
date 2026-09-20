@@ -14,5 +14,11 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@opencode-ai/sdk": "^1.18.31",
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.14",
+    "typescript": "^7.0.2"
   }
 }
