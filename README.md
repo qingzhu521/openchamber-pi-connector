@@ -44,14 +44,23 @@ cat > ~/.config/openchamber-pi/settings.json <<'EOF'
 EOF
 
 # start OpenChamber with pi as the agent backend
-OPENCHAMBER_DATA_DIR=~/.config/openchamber-pi openchamber serve --port 3600
-# open http://127.0.0.1:3600
+OPENCHAMBER_DATA_DIR=~/.config/openchamber-pi openchamber serve --port 57124
+# open http://127.0.0.1:57124
 ```
 
 Requires: Node.js 22+, the `pi` CLI on PATH (`npm i -g @earendil-works/pi-coding-agent`).
 
 Debug logging: set `OCPI_DEBUG=1` (writes HTTP requests and pi events to
 `/tmp/openchamber-pi-debug.log`, override with `OCPI_DEBUG_LOG`).
+
+## Desktop launcher (macOS)
+
+`contrib/install-launcher.sh` builds **OpenChamber (Pi).app** in
+/Applications. Launching OpenChamber through that icon starts the pi-backed
+instance if needed, opens OpenChamber, then watches: when OpenChamber quits,
+the pi instance is stopped too — the same lifecycle as the built-in opencode
+backend. Defaults: port 57124, profile `~/.config/openchamber-pi` (override
+via `OCPI_PORT` / `OCPI_PROFILE` / `OCPI_APP`).
 
 ## Why
 
