@@ -13,14 +13,29 @@
 # backend, each with its own remoteOpenchamber.preferredPort.
 #
 # Env overrides: OCPI_PI_PORT (default 57124), OCPI_PI_SHIM (default:
-# sibling bin/opencode-pi), OCPI_REAL_OPENCODE (default: opencode on PATH).
+# sibling bin/opencode-pi), OCPI_REAL_OPENCODE (default: first opencode on
+# the candidate paths that is not this dispatcher — safe when a symlink
+# named "opencode" points back at us after the real CLI was removed).
 
 set -u
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PI_PORT="${OCPI_PI_PORT:-57124}"
 PI_SHIM="${OCPI_PI_SHIM:-$SCRIPT_DIR/opencode-pi}"
-REAL_OPENCODE="${OCPI_REAL_OPENCODE:-opencode}"
+
+find_real_opencode() {
+  self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+  for c in ${OCPI_REAL_OPENCODE:-} "$HOME/.opencode/bin/opencode" "$HOME/.bun/bin/opencode" "$(command -v opencode 2>/dev/null)"; do
+    [ -n "$c" ] && [ -x "$c" ] || continue
+    target=$(readlink -f "$c" 2>/dev/null || echo "$c")
+    [ "$target" = "$self" ] && continue
+    echo "$c"
+    return 0
+  done
+  return 1
+}
+
+REAL_OPENCODE=$(find_real_opencode || true)
 
 pid=$$
 while [ -n "$pid" ] && [ "$pid" != "1" ]; do
@@ -31,10 +46,14 @@ while [ -n "$pid" ] && [ "$pid" != "1" ]; do
       if [ "$port" = "$PI_PORT" ]; then
         exec "$PI_SHIM" "$@"
       fi
-      exec "$REAL_OPENCODE" "$@"
+      [ -n "$REAL_OPENCODE" ] && exec "$REAL_OPENCODE" "$@"
+      echo "opencode-dispatch: real opencode not found (removed?), and port $port != pi port $PI_PORT" >&2
+      exit 1
       ;;
   esac
   pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d " ")
 done
 
-exec "$REAL_OPENCODE" "$@"
+[ -n "$REAL_OPENCODE" ] && exec "$REAL_OPENCODE" "$@"
+echo "opencode-dispatch: real opencode not found (removed?)" >&2
+exit 1
