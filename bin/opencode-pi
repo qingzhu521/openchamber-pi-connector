@@ -2,9 +2,10 @@
 # Wrapper so OpenChamber can spawn the adapter as $OPENCODE_BINARY.
 # Only the `serve` subcommand is implemented; everything else errors clearly.
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PKG_DIR="$SCRIPT_DIR/.."
 if [ "$1" = "serve" ]; then
   shift
-  exec npx tsx "$SCRIPT_DIR/../src/cli.ts" serve "$@"
+  exec "$PKG_DIR/node_modules/.bin/tsx" "$PKG_DIR/src/cli.ts" serve "$@"
 fi
 echo "opencode-pi wrapper: unsupported command '$1' (only 'serve' is implemented)" >&2
 exit 1
