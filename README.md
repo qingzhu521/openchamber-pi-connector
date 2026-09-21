@@ -18,11 +18,14 @@ No OpenChamber fork required: point OpenChamber at this adapter as an
 
 ## Status
 
-**M1 works**: a real OpenChamber UI session chatting through the adapter with
-pi as the backend — session create, prompt, live text/reasoning streaming over
-SSE, abort, rename, delete, model catalog from pi. See
-[docs/architecture.md](docs/architecture.md) for the design and
-[docs/api-surface.md](docs/api-surface.md) for the endpoint compatibility list.
+**M1 + M2 work**: a real OpenChamber UI session chatting through the adapter
+with pi as the backend — session create, prompt, live text/reasoning
+streaming over SSE, **tool call parts** (bash/write/edit… rendered in
+OpenChamber with arguments, results and completed/error states, mapped to
+the SDK v2 `ToolState` union), abort, rename, delete, model catalog from pi.
+See [docs/architecture.md](docs/architecture.md) for the design and
+[docs/api-surface.md](docs/api-surface.md) for the endpoint compatibility
+list.
 
 ## Usage with OpenChamber
 
@@ -53,14 +56,14 @@ Requires: Node.js 22+, the `pi` CLI on PATH (`npm i -g @earendil-works/pi-coding
 Debug logging: set `OCPI_DEBUG=1` (writes HTTP requests and pi events to
 `/tmp/openchamber-pi-debug.log`, override with `OCPI_DEBUG_LOG`).
 
-## Desktop launcher (macOS)
+## Standalone / smoke test
 
-`contrib/install-launcher.sh` builds **OpenChamber (Pi).app** in
-/Applications. Launching OpenChamber through that icon starts the pi-backed
-instance if needed, opens OpenChamber, then watches: when OpenChamber quits,
-the pi instance is stopped too — the same lifecycle as the built-in opencode
-backend. Defaults: port 57124, profile `~/.config/openchamber-pi` (override
-via `OCPI_PORT` / `OCPI_PROFILE` / `OCPI_APP`).
+```bash
+npm install
+npm run build
+npm run smoke   # end-to-end: bootstrap probes, tool round (real pi run), abort, rename, delete
+npm run probe   # dump raw pi RPC events to pi-probe-events.jsonl (protocol forensics)
+```
 
 ## Why
 

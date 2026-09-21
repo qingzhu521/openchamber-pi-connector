@@ -20,7 +20,7 @@ Inventory extracted from `reference/openchamber` (commit: shallow clone of
 | `session.update` | rename/metadata | RPC `set_session_name` |
 | `session.delete` | delete session | kill process + remove session file |
 | `session.messages` | load message history | RPC `get_messages` |
-| `session.promptAsync` | send prompt (async) | RPC `prompt` |
+| `session.promptAsync` | send prompt (async) | RPC `prompt`. **Echo contract** (verified against OpenChamber's event-reducer): reuse the client's optimistic `messageID` from the body for the user message and emit `message.updated` + `message.part.updated` (user text part) so the optimistic insert reconciles in place instead of rendering twice. |
 | `session.abort` | stop generation | RPC `abort` |
 | `session.fork` | fork from a message | RPC `fork` / `get_fork_messages` |
 | `session.revert` / `session.unrevert` | undo file changes | **gap** — pi has no revert; map to git or reject |
@@ -76,12 +76,22 @@ Minimum viable set for M1 (chat works): `server.connected`,
 | pi stdout event | OpenCode SSE |
 |---|---|
 | `message_update` / `assistantMessageEvent: text_delta` | `message.part.delta` + `message.part.updated` |
-| tool call start/end events | `message.part.updated` (tool part) |
-| `bash_execution_update` | `message.part.updated` (bash part) |
+| `assistantMessageEvent: toolcall_start/delta/end` | `message.part.updated` (tool part; **M2 implemented** — pending `{raw}` accumulates the streamed JSON fragments, running carries parsed `arguments`, result lands at `turn_end`) |
+| `turn_end` (`toolResults[]`) | `message.part.updated` (tool part → completed `{output}` / error per `isError`, matched by `toolCallId`) |
+| `bash_execution_update` | (unmapped — folded into tool parts above) |
 | turn start / turn end | `session.status` (busy) / `session.idle` |
-| `extension_ui_request` (confirm/select/input) | `permission.asked` / `question.asked` |
+| `extension_ui_request` (confirm/select/input) | `permission.asked` / `question.asked` (M1: auto-cancel) |
 | `extension_error` / RPC error response | `session.error` |
 | `get_entries` / `get_tree` (polled or on fork) | `session.updated` |
+
+Tool part `state` mirrors `@opencode-ai/sdk` v2 (1.18.31) `ToolState` —
+discriminated union on `.status` with `input`/`output`/`title` inside the
+state object (verified against the locally installed
+`dist/v2/gen/types.gen.d.ts`). Live-observed pi shapes (probe, 2026-09-21):
+`toolcall_start {contentIndex, id, toolName}` →
+`toolcall_delta {delta}` (JSON argument fragments) →
+`toolcall_end {toolCall:{id, name, arguments}}` →
+`turn_end {toolResults:[{toolCallId, content:[{type:"text",text}], isError}]}`.
 
 ## Open items
 

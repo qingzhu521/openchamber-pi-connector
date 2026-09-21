@@ -31,6 +31,7 @@ export class AdapterServer {
   private sessions: SessionManager;
   private sseClients = new Set<ServerResponse>();
   private catalogPromise: Promise<Catalog> | undefined;
+  private actualPort: number | undefined;
 
   constructor(private options: AdapterServerOptions) {
     this.sessions = new SessionManager((directory, event) => this.broadcast(directory, event));
@@ -50,10 +51,13 @@ export class AdapterServer {
       this.server.once("error", reject);
       this.server.listen(this.options.port, this.options.host, () => resolve());
     });
+    const addr = this.server.address();
+    this.actualPort = typeof addr === "object" && addr !== null ? addr.port : this.options.port;
   }
 
   get url(): string {
-    return `http://${this.options.host}:${this.options.port}`;
+    const port = this.actualPort ?? this.options.port;
+    return `http://${this.options.host}:${port}`;
   }
 
   async stop(): Promise<void> {
@@ -169,7 +173,7 @@ export class AdapterServer {
             .filter((p) => p.type === "text" && typeof p.text === "string")
             .map((p) => p.text!)
             .join("\n");
-          void this.sessions.prompt(sessionId!, text, body.model, body.noReply);
+          void this.sessions.prompt(sessionId!, text, body.model, body.noReply, body.messageID).catch(() => undefined);
           res.writeHead(204).end();
           return;
         }
@@ -179,7 +183,7 @@ export class AdapterServer {
             .filter((p) => p.type === "text" && typeof p.text === "string")
             .map((p) => p.text!)
             .join("\n");
-          await this.sessions.prompt(sessionId!, text, body.model, body.noReply);
+          await this.sessions.prompt(sessionId!, text, body.model, body.noReply, body.messageID);
           const msgs = this.sessions.messages(sessionId!) ?? [];
           this.json(res, 200, msgs[msgs.length - 1] ?? null);
           return;

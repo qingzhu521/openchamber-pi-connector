@@ -73,7 +73,56 @@ export interface OCReasoningPart {
   time?: { start: number; end?: number };
 }
 
-export type OCPart = OCTextPart | OCReasoningPart;
+/**
+ * Tool call part (M2). `state` mirrors @opencode-ai/sdk v2 (1.18.31)
+ * `ToolState` exactly — a discriminated union on `.status` with
+ * input/output/title living inside the state object (verified against the
+ * locally installed dist/v2/gen/types.gen.d.ts).
+ */
+export interface OCToolStatePending {
+  status: "pending";
+  input: Record<string, unknown>;
+  raw: string;
+}
+
+export interface OCToolStateRunning {
+  status: "running";
+  input: Record<string, unknown>;
+  title?: string;
+  metadata?: Record<string, unknown>;
+  time: { start: number };
+}
+
+export interface OCToolStateCompleted {
+  status: "completed";
+  input: Record<string, unknown>;
+  output: string;
+  title: string;
+  metadata: Record<string, unknown>;
+  time: { start: number; end: number };
+}
+
+export interface OCToolStateError {
+  status: "error";
+  input: Record<string, unknown>;
+  error: string;
+  metadata?: Record<string, unknown>;
+  time: { start: number; end: number };
+}
+
+export type OCToolState = OCToolStatePending | OCToolStateRunning | OCToolStateCompleted | OCToolStateError;
+
+export interface OCToolPart {
+  id: string;
+  sessionID: string;
+  messageID: string;
+  type: "tool";
+  callID: string;
+  tool: string;
+  state: OCToolState;
+}
+
+export type OCPart = OCTextPart | OCReasoningPart | OCToolPart;
 
 export interface OCMessageWithParts {
   info: OCMessage;

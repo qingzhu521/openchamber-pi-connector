@@ -10,7 +10,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "probe": "tsx contrib/probe.ts",
+    "smoke": "tsx contrib/smoke.ts"
   },
   "engines": {
     "node": ">=22"

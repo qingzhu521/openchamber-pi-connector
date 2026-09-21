@@ -3,6 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
+pi-probe-events.jsonl
 
 # Local reference clones of upstream projects (not part of this repo)
 reference/

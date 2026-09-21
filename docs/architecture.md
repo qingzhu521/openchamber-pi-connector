@@ -41,7 +41,8 @@ SDK embed stays an option behind the same internal interface.
 
 | OpenCode (SSE `event`) | pi (stdout JSONL) |
 |---|---|
-| `message.updated` / `message.part.updated` | `message_update` (`assistantMessageEvent`: `text_delta`, tool call events) |
+| `message.updated` / `message.part.updated` | `message_update` (`assistantMessageEvent`: `text_delta` etc.) |
+| `message.part.updated` (tool part) | `message_update` (`toolcall_start`/`toolcall_delta`/`toolcall_end`) + `turn_end` (`toolResults[]` by `toolCallId`) — **M2** |
 | `session.status` / `session.idle` | turn lifecycle events (`agent_start`/`agent_end`-family) |
 | `permission.asked` | pi extension-UI sub-protocol (`extension_ui_request`/`extension_ui_response`) — semantics differ, map conservatively |
 | `session.error` | `extension_error`, RPC error responses |
@@ -66,6 +67,10 @@ SDK embed stays an option behind the same internal interface.
 2. **M1 — Session CRUD + prompt round-trip**: create session, send prompt,
    stream text deltas as SSE, abort. Enough for OpenChamber to show a chat.
 3. **M2 — Tool calls & file changes**: translate tool events; diffs visible.
+   ✅ tool parts (2026-09-21): streamed `toolcall_*` → OpenCode tool parts
+   with the SDK v2 `ToolState` union; results matched by `toolCallId` from
+   `turn_end.toolResults`; dangling parts finalized as errors on abort/exit.
+   File-diff surfacing beyond tool parts is still open.
 4. **M3 — Permissions/questions bridge**.
 5. **M4 — Model listing/switching, session stats, compaction**.
 6. **M5 — Packaging**: `npx openchamber-pi`, docs, CI, npm publish.
