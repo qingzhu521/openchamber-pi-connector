@@ -16,6 +16,43 @@ OpenChamber (UI)  ──OpenCode API──▶  openchamber-pi  ──JSONL/stdio
 No OpenChamber fork required: point OpenChamber at this adapter as an
 **external OpenCode server** and sessions run on pi.
 
+[![GitHub stars](https://img.shields.io/github/stars/qingzhu521/openchamber-pi-connector?style=flat&labelColor=100F0F&color=66800B)](https://github.com/qingzhu521/openchamber-pi-connector/stargazers)
+[![License](https://img.shields.io/github/license/qingzhu521/openchamber-pi-connector?style=flat&labelColor=100F0F&color=205EA6)](./LICENSE)
+[![OpenChamber](https://img.shields.io/badge/OpenChamber-1.24.x-100F0F?style=flat)](https://github.com/openchamber/openchamber)
+
+## Quick start
+
+Needs Node.js 22+ and the `pi` CLI on PATH (`npm i -g @earendil-works/pi-coding-agent`).
+
+```bash
+git clone https://github.com/qingzhu521/openchamber-pi-connector.git
+cd openchamber-pi-connector
+npm install && npm run build
+
+mkdir -p ~/.config/openchamber-pi
+printf '{\n  "opencodeBinary": "%s/bin/opencode-pi"\n}\n' "$PWD" \
+  > ~/.config/openchamber-pi/settings.json
+
+OPENCHAMBER_DATA_DIR=~/.config/openchamber-pi openchamber serve --port 57124
+# open http://127.0.0.1:57124
+```
+
+That starts a second OpenChamber instance whose sessions run on pi, leaving
+your main OpenChamber setup untouched.
+
+## Compatibility
+
+| OpenChamber | Status |
+|---|---|
+| 1.24.x (desktop, API v1) | tested against 1.24.2 |
+| other versions | not tested |
+
+OpenChamber changes which OpenCode API calls it makes between releases. If a
+feature breaks on a newer OpenChamber, run `npm run smoke` to see which part
+failed, then open an issue with the output. See
+[docs/api-surface.md](docs/api-surface.md) for the endpoints this adapter
+implements.
+
 ## Status
 
 **M1 + M2 work**: a real OpenChamber UI session chatting through the adapter
