@@ -29,11 +29,12 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { piAgentDir } from "./agent-dir.js";
 
 /** pi's session directory for a given cwd (see pi docs/session-format.md). */
 export function piSessionDir(cwd: string): string {
   const sanitized = cwd.replace(/^[/\\]+/, "").replace(/[\\/:\u0000]/g, "-");
-  return join(homedir(), ".pi", "agent", "sessions", `--${sanitized}--`);
+  return join(piSessionsRoot(), `--${sanitized}--`);
 }
 
 /** Deterministic OpenChamber session id for a pi session id. */
@@ -165,7 +166,7 @@ function scanOneAnyDirectory(piPath: string): ScannedSession | undefined {
 
 /** Root of pi's session storage: one subdirectory per cwd. */
 function piSessionsRoot(): string {
-  return join(homedir(), ".pi", "agent", "sessions");
+  return join(piAgentDir(), "sessions");
 }
 
 /**

@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
     "probe": "tsx contrib/probe.ts",
     "smoke": "tsx contrib/smoke.ts",
     "model-smoke": "tsx contrib/model-consistency.ts",
