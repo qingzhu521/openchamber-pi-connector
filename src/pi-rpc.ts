@@ -57,9 +57,14 @@ export class PiRpcClient extends EventEmitter {
     return super.on("exit", listener);
   }
 
+  onExtensionUI(listener: (request: Record<string, unknown>) => void): this {
+    return super.on("extension_ui_request", listener);
+  }
+
   constructor(private options: PiRpcClientOptions) {
     super();
-    const args = ["--mode", "rpc", ...(options.args ?? [])];
+    const extraArgs = process.env.OCPI_PI_ARGS?.trim().split(/\s+/).filter(Boolean) ?? [];
+    const args = ["--mode", "rpc", ...(options.args ?? []), ...extraArgs];
     this.proc = spawn(options.piBinary ?? process.env.OCPI_PI_BINARY ?? "pi", args, {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
@@ -132,18 +137,17 @@ export class PiRpcClient extends EventEmitter {
     this.emit("event", msg);
   }
 
-  /**
-   * M1 policy for the extension-UI sub-protocol: fire-and-forget methods are
-   * ignored; blocking dialogs (select/confirm/input/editor) are cancelled so
-   * the agent never deadlocks waiting on a UI we do not render yet.
-   */
   private handleExtensionUI(msg: Record<string, unknown>): void {
     const method = msg.method as string | undefined;
     const id = msg.id as string | undefined;
     if (!id || !method) return;
     const blocking = new Set(["select", "confirm", "input", "editor"]);
     if (!blocking.has(method)) return;
-    this.write({ type: "extension_ui_response", id, cancelled: true });
+    this.emit("extension_ui_request", msg);
+  }
+
+  respondExtensionUI(response: Record<string, unknown>): void {
+    this.write(response);
   }
 
   private write(obj: Record<string, unknown>): void {

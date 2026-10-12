@@ -8,6 +8,7 @@ import { appendFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { SessionManager } from "./sessions.js";
+import { ApprovalInputError, toV2Permission } from "./approvals.js";
 import { getAgentName, getExposedAgentNames } from "./agent-name.js";
 import { loadCatalog, type Catalog } from "./catalog.js";
 import {
@@ -168,7 +169,7 @@ export class AdapterServer {
       await this.handle(req, res);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.json(res, 500, { name: "UnknownError", data: { message } });
+      this.json(res, err instanceof ApprovalInputError ? 400 : 500, { name: err instanceof ApprovalInputError ? "InvalidRequestError" : "UnknownError", data: { message } });
     }
   }
 
@@ -334,11 +335,46 @@ export class AdapterServer {
       return;
     }
     if (path === "/question" && method === "GET") {
-      this.json(res, 200, []);
+      this.json(res, 200, this.sessions.questions());
       return;
     }
     if (path === "/permission" && method === "GET") {
-      this.json(res, 200, []);
+      this.json(res, 200, this.sessions.permissions());
+      return;
+    }
+    const questionReply = path.match(/^\/question\/([^/]+)\/reply$/);
+    if (questionReply && method === "POST") {
+      const requestID = decodeURIComponent(questionReply[1]!);
+      const body = (await this.body(req)) as { answers?: Array<string[]> };
+      const pending = this.sessions.questions().find((question) => question.id === requestID);
+      if (!pending || !this.sessions.replyQuestion(pending.sessionID, requestID, body.answers ?? [])) {
+        this.json(res, 404, { name: "QuestionNotFoundError", data: { message: `question not found: ${requestID}` } });
+        return;
+      }
+      this.json(res, 200, true);
+      return;
+    }
+    const questionReject = path.match(/^\/question\/([^/]+)\/reject$/);
+    if (questionReject && method === "POST") {
+      const requestID = decodeURIComponent(questionReject[1]!);
+      const pending = this.sessions.questions().find((question) => question.id === requestID);
+      if (!pending || !this.sessions.rejectQuestion(pending.sessionID, requestID)) {
+        this.json(res, 404, { name: "QuestionNotFoundError", data: { message: `question not found: ${requestID}` } });
+        return;
+      }
+      this.json(res, 200, true);
+      return;
+    }
+    const permissionReply = path.match(/^\/permission\/([^/]+)\/reply$/);
+    if (permissionReply && method === "POST") {
+      const requestID = decodeURIComponent(permissionReply[1]!);
+      const body = (await this.body(req)) as { reply?: "once" | "always" | "reject"; message?: string };
+      const pending = this.sessions.permissions().find((permission) => permission.id === requestID);
+      if (!pending || !body.reply || !this.sessions.replyPermission(pending.sessionID, requestID, body.reply, body.message)) {
+        this.json(res, 404, { name: "PermissionNotFoundError", data: { message: `permission not found: ${requestID}` } });
+        return;
+      }
+      this.json(res, 200, true);
       return;
     }
     if (path === "/lsp" && method === "GET") {
@@ -514,7 +550,11 @@ export class AdapterServer {
       return;
     }
     if (path === "/api/permission/request" && method === "GET") {
-      this.json(res, 200, withLocation([]));
+      this.json(res, 200, withLocation(this.sessions.permissions().map(toV2Permission)));
+      return;
+    }
+    if (path === "/api/question/request" && method === "GET") {
+      this.json(res, 200, withLocation(this.sessions.questions()));
       return;
     }
     if (path === "/api/permission/saved" && method === "GET") {
@@ -626,16 +666,49 @@ export class AdapterServer {
           return;
         }
       }
-      const permissionMatch = sub.match(/^\/permission\/([^/]+)(\/reply)?$/);
-      if (permissionMatch) {
-        const requestId = decodeURIComponent(permissionMatch[1]!);
-        if (permissionMatch[2] === "/reply" && method === "POST") {
-          await this.body(req);
+      const questionMatch = sub.match(/^\/question\/([^/]+)(\/reply|\/reject)?$/);
+      if (questionMatch) {
+        const requestId = decodeURIComponent(questionMatch[1]!);
+        if (questionMatch[2] === "/reply" && method === "POST") {
+          const body = (await this.body(req)) as { answers?: Array<string[]> };
+          if (!this.sessions.replyQuestion(sessionId, requestId, body.answers ?? [])) {
+            this.json(res, 404, { name: "QuestionNotFoundError", data: { message: `question not found: ${requestId}` } });
+            return;
+          }
+          res.writeHead(204).end();
+          return;
+        }
+        if (questionMatch[2] === "/reject" && method === "POST") {
+          if (!this.sessions.rejectQuestion(sessionId, requestId)) {
+            this.json(res, 404, { name: "QuestionNotFoundError", data: { message: `question not found: ${requestId}` } });
+            return;
+          }
           res.writeHead(204).end();
           return;
         }
         if (method === "GET") {
-          this.json(res, 404, { name: "PermissionNotFoundError", data: { message: `permission not found: ${requestId}` } });
+          const question = this.sessions.questions(sessionId).find((entry) => entry.id === requestId);
+          if (question === undefined) this.json(res, 404, { name: "QuestionNotFoundError", data: { message: `question not found: ${requestId}` } });
+          else this.json(res, 200, { data: question });
+          return;
+        }
+      }
+      const permissionMatch = sub.match(/^\/permission\/([^/]+)(\/reply)?$/);
+      if (permissionMatch) {
+        const requestId = decodeURIComponent(permissionMatch[1]!);
+        if (permissionMatch[2] === "/reply" && method === "POST") {
+          const body = (await this.body(req)) as { reply?: "once" | "always" | "reject"; message?: string };
+          if (!body.reply || !this.sessions.replyPermission(sessionId, requestId, body.reply, body.message)) {
+            this.json(res, 404, { name: "PermissionNotFoundError", data: { message: `permission not found: ${requestId}` } });
+            return;
+          }
+          res.writeHead(204).end();
+          return;
+        }
+        if (method === "GET") {
+          const permission = this.sessions.permissions(sessionId).find((entry) => entry.id === requestId);
+          if (permission === undefined) this.json(res, 404, { name: "PermissionNotFoundError", data: { message: `permission not found: ${requestId}` } });
+          else this.json(res, 200, { data: toV2Permission(permission) });
           return;
         }
       }
@@ -734,8 +807,12 @@ export class AdapterServer {
           this.json(res, 200, { data: [] });
           return;
         }
+        case "GET /question": {
+          this.json(res, 200, { data: this.sessions.questions(sessionId) });
+          return;
+        }
         case "GET /permission": {
-          this.json(res, 200, { data: [] });
+          this.json(res, 200, { data: this.sessions.permissions(sessionId).map(toV2Permission) });
           return;
         }
         case "GET /inbox": {

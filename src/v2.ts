@@ -415,6 +415,22 @@ export class V2EventTranslator {
           }),
         ];
       }
+      case "permission.asked": {
+        const p = ev.properties;
+        return [this.frame(directory, "permission.v2.asked", {
+          id: p.id, sessionID: p.sessionID, action: p.permission,
+          resources: p.patterns, save: p.always, metadata: p.metadata,
+          ...(p.tool ? { source: { type: "tool", ...p.tool } } : {}),
+        })];
+      }
+      case "permission.replied":
+        return [this.frame(directory, "permission.v2.replied", ev.properties)];
+      case "question.asked":
+        return [this.frame(directory, "question.v2.asked", ev.properties)];
+      case "question.replied":
+        return [this.frame(directory, "question.v2.replied", ev.properties)];
+      case "question.rejected":
+        return [this.frame(directory, "question.v2.rejected", ev.properties)];
       default:
         return [];
     }

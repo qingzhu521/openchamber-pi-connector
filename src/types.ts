@@ -143,6 +143,36 @@ export type OCEvent =
   | { type: "session.error"; properties: { sessionID?: string; error?: { name: string; data: { message: string } } } }
   | { type: "message.updated"; properties: { info: OCMessage } }
   | { type: "message.part.updated"; properties: { part: OCPart; delta?: string } }
+  | {
+      type: "permission.asked";
+      properties: {
+        id: string;
+        sessionID: string;
+        permission: string;
+        patterns: string[];
+        metadata: Record<string, unknown>;
+        always: string[];
+        tool?: { messageID: string; callID: string };
+      };
+    }
+  | { type: "permission.replied"; properties: { sessionID: string; requestID: string; reply: "once" | "always" | "reject" } }
+  | {
+      type: "question.asked";
+      properties: {
+        id: string;
+        sessionID: string;
+        questions: Array<{
+          question: string;
+          header: string;
+          options: Array<{ label: string; description: string }>;
+          multiple?: boolean;
+          custom?: boolean;
+        }>;
+        tool?: { messageID: string; callID: string };
+      };
+    }
+  | { type: "question.replied"; properties: { sessionID: string; requestID: string; answers: Array<string[]> } }
+  | { type: "question.rejected"; properties: { sessionID: string; requestID: string } }
   /**
    * The model pi is actually running changed — either the UI asked for it or pi
    * changed it on its own side. v2.ts maps this to `session.model.selected`,
